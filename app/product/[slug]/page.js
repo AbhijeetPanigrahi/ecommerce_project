@@ -1,6 +1,6 @@
 import { client } from "../../../lib/client";
 import ProductDetailDisplay from "../../../components/ProductDetailDisplay";
-import Product from "../../../components/product";
+import Product from "../../../components/Product";
 import { useStateContext } from "../../../context/StateContext";
 
 const ProductDetails = async ({ params }) => {
