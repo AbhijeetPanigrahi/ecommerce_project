@@ -2,6 +2,8 @@
 
 import React, { useState } from "react";
 import { useStateContext } from "@/context/StateContext";
+import { useRouter } from "next/navigation";
+import { toast } from "react-hot-toast";
 import {
   AiFillStar,
   AiOutlineStar,
@@ -15,10 +17,89 @@ const ProductDetailDisplay = ({ productData }) => {
 
   const [index, setIndex] = useState(0); // Manage image carousel state
   const [quantity, setQuantity] = useState(1); // Manage quantity state
+  const [loading, setLoading] = useState(false); // Add loading state
+  const router = useRouter();
 
   // const handleDecrease = () => setQuantity((prev) => Math.max(prev - 1, 1));
   // const handleIncrease = () => setQuantity((prev) => prev + 1);
-  const { decQty, incQty, qty, onAdd } = useStateContext();
+  const { decQty, incQty, qty, onAdd, clearCart } = useStateContext();
+
+  // Add Razorpay initialization
+  const initializeRazorpay = () => {
+    return new Promise((resolve) => {
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.async = true;
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
+  // Add handleBuyNow function
+  const handleBuyNow = async () => {
+    try {
+      setLoading(true);
+      const res = await initializeRazorpay();
+
+      if (!res) {
+        toast.error("Razorpay SDK failed to load");
+        return;
+      }
+
+      // Calculate total amount
+      const totalAmount = price * qty;
+
+      // Create order
+      const response = await fetch("/api/razorpay", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          amount: totalAmount,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to create order");
+      }
+
+      // Configure Razorpay options
+      const options = {
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+        amount: data.amount,
+        currency: data.currency,
+        name: "Your Store Name",
+        description: `Purchase of ${name} (Qty: ${qty})`,
+        order_id: data.id,
+        image: urlFor(image[0]).url(),
+        handler: function (response) {
+          toast.success("Payment Successful!");
+          clearCart();
+          router.push("/success");
+        },
+        prefill: {
+          name: "",
+          email: "",
+          contact: "",
+        },
+        theme: {
+          color: "#f02d34",
+        },
+      };
+
+      const paymentObject = new window.Razorpay(options);
+      paymentObject.open();
+    } catch (error) {
+      console.error("Payment Error:", error);
+      toast.error(error.message || "Payment failed");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="product-detail-container">
@@ -85,8 +166,13 @@ const ProductDetailDisplay = ({ productData }) => {
           >
             Add to Cart
           </button>
-          <button type="button" className="buy-now">
-            Buy Now
+          <button
+            type="button"
+            className="buy-now"
+            onClick={handleBuyNow}
+            disabled={loading}
+          >
+            {loading ? "Processing..." : "Buy Now"}
           </button>
         </div>
       </div>
